@@ -1,17 +1,21 @@
 use anyhow::Result;
-use itertools::Itertools;
 
 fn main() -> Result<()> {
-    std::fs::read_to_string("./data/day02.input")?
+    let result = std::fs::read_to_string("./data/day02.input")?
         .trim()
         .split("\n")
-        .map(|block| block.split_once(" ").iter().collect_tuple().map(|x| match x {
-            (a, b) if ((a == "A" && b == "X") ||
-                       (a == "B" && b == "Y") ||
-                       (a == "C" && b == "Z")) => 3,
+        .map(|block| block.split_once(" ").unwrap()).map(|x| match x {
+            ("A", "X") => 4,
+            ("A", "Y") => 1,
+            ("A", "Z") => 7,
+            ("B", "X") => 8,
+            ("B", "Y") => 5,
+            ("B", "Z") => 2,
+            ("C", "X") => 3,
+            ("C", "Y") => 9,
+            ("C", "Z") => 6,
             (_, _) => 0,
-        }).unwrap().sum())
-        .collect::<Vec<i32>>();
-
+        }).sum::<i32>();
+    println!("{}", result);
     Ok(())
 }
