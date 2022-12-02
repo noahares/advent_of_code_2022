@@ -6,7 +6,7 @@ fn main() -> Result<()> {
         .split("\n\n")
         .map(|block| block.split("\n").map(|item| item.parse::<i32>().unwrap()).sum())
         .collect::<Vec<i32>>();
-        sums.sort_unstable_by(|a, b| b.cmp(a));
+    sums.sort_unstable_by(|a, b| b.cmp(a));
 
     // part 1
     println!("{:?}", sums
