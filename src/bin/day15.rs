@@ -42,15 +42,21 @@ fn part01() -> Result<usize> {
 }
 
 
-fn get_outer_sensor_boundary_iterator(pair: &SensorBeaconPair) -> impl Iterator<Item = (i32, i32)> {
-    let mut positions = Vec::new();
-    for i in 0..pair.distance + 1 {
-        positions.push((pair.sensor.0 + ((pair.distance as i32) + 1) - (i as i32), pair.sensor.1 + (i as i32))); // E->S
-        positions.push((pair.sensor.0 - (i as i32), pair.sensor.1 + ((pair.distance as i32) + 1) - (i as i32))); // S->W
-        positions.push((pair.sensor.0 - ((pair.distance as i32) + 1) + (i as i32), pair.sensor.1 - (i as i32))); // W->N
-        positions.push((pair.sensor.0 + (i as i32), pair.sensor.1 - ((pair.distance as i32) + 1) + (i as i32))); // N->E
-    }
-    positions.into_iter()
+fn get_outer_sensor_boundary_iterator(sensor: (i32, i32), distance: u32) -> impl std::iter::Iterator<Item = (i32, i32)> {
+    let mut num_positions = 0;
+    let length_of_side = distance + 1;
+    std::iter::from_fn(move || {
+        let i = num_positions % length_of_side;
+        let side = num_positions / length_of_side;
+        num_positions += 1;
+        match side {
+            0 => Some((sensor.0 + ((distance as i32) + 1) - (i as i32), sensor.1 + (i as i32))),
+            1 => Some((sensor.0 - (i as i32), sensor.1 + ((distance as i32) + 1) - (i as i32))),
+            2 => Some((sensor.0 - ((distance as i32) + 1) + (i as i32), sensor.1 - (i as i32))),
+            3 => Some((sensor.0 + (i as i32), sensor.1 - ((distance as i32) + 1) + (i as i32))),
+            _ => None
+        }
+    })
 }
 
 fn manhatten_distance(a: (i32, i32), b: (i32, i32)) -> u32 {
@@ -74,7 +80,7 @@ fn part02() -> Result<u64> {
         }).collect();
 
     for pair in &sensor_beacon_pairs {
-        for pos in get_outer_sensor_boundary_iterator(&pair) {
+        for pos in get_outer_sensor_boundary_iterator(pair.sensor, pair.distance) {
             if !(0..dim).contains(&pos.0) || !(0..dim).contains(&pos.1) { continue; }
             match sensor_beacon_pairs.iter().find(|other_pair| manhatten_distance(pos, other_pair.sensor) <= other_pair.distance) {
                 Some(_) => continue,
