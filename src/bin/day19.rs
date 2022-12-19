@@ -21,8 +21,7 @@ struct State {
     ore_robots: u32,
     clay_robots: u32,
     obsidian_robots: u32,
-    geode_robots: u32,
-    time: u32
+    geode_robots: u32
 }
 
 impl State {
@@ -31,14 +30,12 @@ impl State {
         self.clay += self.clay_robots;
         self.obsidian += self.obsidian_robots;
         self.geode += self.geode_robots;
-        self.time += 1;
     }
 
     fn timestep(self: &mut Self, blueprint: &Blueprint) -> Vec<State> {
        let mut successor_states = Vec::new();
        let mut base_state = *self;
        base_state.update();
-       if base_state.time == TIME { return successor_states; }
        successor_states.push(base_state);
        if self.ore >= blueprint.ore {
            let mut state = base_state;
@@ -69,12 +66,12 @@ impl State {
        successor_states
     }
 
-    fn can_prune(self: &Self, geode_threshold: u32) -> bool {
-        self.geode_lower_bound() + (0..TIME - self.time).sum::<u32>() < geode_threshold
+    fn can_prune(self: &Self, geode_threshold: u32, remaining_time: u32) -> bool {
+        self.geode_lower_bound(remaining_time) + (0..remaining_time).sum::<u32>() < geode_threshold
     }
 
-    fn geode_lower_bound(self: &Self) -> u32 {
-        self.geode + self.geode_robots * (TIME - self.time)
+    fn geode_lower_bound(self: &Self, remaining_time: u32) -> u32 {
+        self.geode + self.geode_robots * remaining_time
     }
 
 }
@@ -88,18 +85,29 @@ fn part01() -> Result<u32> {
             Blueprint { ore: costs[0], clay: costs[1], obsidian: (costs[2], costs[3]), geode: (costs[4], costs[5]) }
         })
     .collect::<Vec<Blueprint>>();
-    let start_state = State { ore: 0, clay: 0, obsidian: 0, geode: 0, ore_robots: 1, clay_robots: 0, obsidian_robots: 0, geode_robots: 0, time: 0 };
+    let start_state = State { ore: 0, clay: 0, obsidian: 0, geode: 0, ore_robots: 1, clay_robots: 0, obsidian_robots: 0, geode_robots: 0 };
     for blueprint in &blueprints {
         let mut states = HashSet::new();
+        let mut next_states = HashSet::new();
         let mut geode_lower_bound = 0;
         states.insert(start_state);
-        while let Some(mut state) = states.iter().next().cloned() {
-            states.remove(&state);
-            // println!("{state:?}");
-            if state.can_prune(geode_lower_bound) { continue; }
-            geode_lower_bound = geode_lower_bound.max(state.geode_lower_bound());
-            let new_states = state.timestep(&blueprint);
-            states.extend(new_states);
+        for t in (1..=TIME).rev() {
+            println!("{t} {} {}", states.len(), (0..t).sum::<u32>());
+            let mut pruned_elements = 0;
+            while let Some(mut state) = states.iter().next().cloned() {
+                states.remove(&state);
+                if state.can_prune(geode_lower_bound, t) {
+                    pruned_elements += 1;
+                    continue;
+                }
+                geode_lower_bound = geode_lower_bound.max(state.geode_lower_bound(t));
+                let new_states = state.timestep(&blueprint);
+                // new_states.iter().filter(|&state| !state.can_prune(geode_lower_bound, t - 1)).collect_vec();
+                next_states.extend(new_states);
+            }
+            std::mem::swap(&mut states, &mut next_states);
+            next_states.clear();
+            println!("{pruned_elements}");
         }
         println!("{geode_lower_bound}");
     }
