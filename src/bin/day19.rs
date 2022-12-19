@@ -2,8 +2,6 @@ use std::collections::HashSet;
 use anyhow::Result;
 use itertools::Itertools;
 
-const TIME: u32 = 24;
-
 #[derive(Debug)]
 struct Blueprint {
     ore: u32,
@@ -32,7 +30,7 @@ impl State {
         self.geode += self.geode_robots;
     }
 
-    fn timestep(self: &mut Self, blueprint: &Blueprint) -> Vec<State> {
+    fn timestep(self: &Self, blueprint: &Blueprint) -> Vec<State> {
        let mut successor_states = Vec::new();
        let mut base_state = *self;
        base_state.update();
@@ -77,7 +75,8 @@ impl State {
 }
 
 fn part01() -> Result<u32> {
-    let blueprints = std::fs::read_to_string("./data/day19.example")?
+    const TIME: u32 = 24;
+    let blueprints = std::fs::read_to_string("./data/day19.input")?
         .trim()
         .lines()
         .map(|line| {
@@ -85,6 +84,41 @@ fn part01() -> Result<u32> {
             Blueprint { ore: costs[0], clay: costs[1], obsidian: (costs[2], costs[3]), geode: (costs[4], costs[5]) }
         })
     .collect::<Vec<Blueprint>>();
+    let mut score = 0;
+    let start_state = State { ore: 0, clay: 0, obsidian: 0, geode: 0, ore_robots: 1, clay_robots: 0, obsidian_robots: 0, geode_robots: 0 };
+    for (i, blueprint) in blueprints.iter().enumerate() {
+        let mut states = HashSet::new();
+        let mut next_states = HashSet::new();
+        let mut geode_lower_bound = 0;
+        states.insert(start_state);
+        for t in (1..=TIME).rev() {
+            for state in &states {
+                if state.can_prune(geode_lower_bound, t) { continue; }
+                geode_lower_bound = geode_lower_bound.max(state.geode_lower_bound(t));
+                let new_states = state.timestep(&blueprint);
+                new_states.iter().filter(|&state| !state.can_prune(geode_lower_bound, t - 1)).collect_vec();
+                next_states.extend(new_states);
+            }
+            std::mem::swap(&mut states, &mut next_states);
+            next_states.clear();
+        }
+        score += (i+1) as u32 * geode_lower_bound;
+    }
+    Ok(score)
+}
+
+fn part02() -> Result<u32> {
+    const TIME: u32 = 32;
+    let blueprints = std::fs::read_to_string("./data/day19.input")?
+        .trim()
+        .lines()
+        .take(3)
+        .map(|line| {
+            let costs = line.split_whitespace().filter_map(|word| word.parse::<u32>().ok()).collect_vec();
+            Blueprint { ore: costs[0], clay: costs[1], obsidian: (costs[2], costs[3]), geode: (costs[4], costs[5]) }
+        })
+    .collect::<Vec<Blueprint>>();
+    let mut score = 1;
     let start_state = State { ore: 0, clay: 0, obsidian: 0, geode: 0, ore_robots: 1, clay_robots: 0, obsidian_robots: 0, geode_robots: 0 };
     for blueprint in &blueprints {
         let mut states = HashSet::new();
@@ -92,30 +126,19 @@ fn part01() -> Result<u32> {
         let mut geode_lower_bound = 0;
         states.insert(start_state);
         for t in (1..=TIME).rev() {
-            println!("{t} {} {}", states.len(), (0..t).sum::<u32>());
-            let mut pruned_elements = 0;
-            while let Some(mut state) = states.iter().next().cloned() {
-                states.remove(&state);
-                if state.can_prune(geode_lower_bound, t) {
-                    pruned_elements += 1;
-                    continue;
-                }
+            for state in &states {
+                if state.can_prune(geode_lower_bound, t) { continue; }
                 geode_lower_bound = geode_lower_bound.max(state.geode_lower_bound(t));
                 let new_states = state.timestep(&blueprint);
-                // new_states.iter().filter(|&state| !state.can_prune(geode_lower_bound, t - 1)).collect_vec();
+                new_states.iter().filter(|&state| !state.can_prune(geode_lower_bound, t - 1)).collect_vec();
                 next_states.extend(new_states);
             }
             std::mem::swap(&mut states, &mut next_states);
             next_states.clear();
-            println!("{pruned_elements}");
         }
-        println!("{geode_lower_bound}");
+        score *= geode_lower_bound;
     }
-    Ok(0)
-}
-
-fn part02() -> Result<u32> {
-    Ok(0)
+    Ok(score)
 }
 
 fn main() -> Result<()> {
