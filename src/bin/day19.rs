@@ -30,38 +30,39 @@ impl State {
         self.geode += self.geode_robots;
     }
 
-    fn timestep(self: &Self, blueprint: &Blueprint) -> Vec<State> {
-       let mut successor_states = Vec::new();
+    fn timestep(self: &Self, blueprint: &Blueprint, geode_threshold: u32, remaining_time: u32, next_states: &mut HashSet<State>) -> () {
        let mut base_state = *self;
        base_state.update();
-       successor_states.push(base_state);
+       // geode first for pruning
+       if self.ore >= blueprint.geode.0 && self.obsidian >= blueprint.geode.1 {
+           let mut state = base_state;
+           state.geode_robots += 1;
+           state.ore -= blueprint.geode.0;
+           state.obsidian -= blueprint.geode.1;
+           if state.can_prune(geode_threshold, remaining_time - 1) { return; }
+           next_states.insert(state);
+       }
+       if base_state.can_prune(geode_threshold, remaining_time - 1) { return; }
+       next_states.insert(base_state);
        if self.ore >= blueprint.ore {
            let mut state = base_state;
            state.ore_robots += 1;
            state.ore -= blueprint.ore;
-           successor_states.push(state);
+           next_states.insert(state);
        }
        if self.ore >= blueprint.clay {
            let mut state = base_state;
            state.clay_robots += 1;
            state.ore -= blueprint.clay;
-           successor_states.push(state);
+           next_states.insert(state);
        }
        if self.ore >= blueprint.obsidian.0 && self.clay >= blueprint.obsidian.1 {
            let mut state = base_state;
            state.obsidian_robots += 1;
            state.ore -= blueprint.obsidian.0;
            state.clay -= blueprint.obsidian.1;
-           successor_states.push(state);
+           next_states.insert(state);
        }
-       if self.ore >= blueprint.geode.0 && self.obsidian >= blueprint.geode.1 {
-           let mut state = base_state;
-           state.geode_robots += 1;
-           state.ore -= blueprint.geode.0;
-           state.obsidian -= blueprint.geode.1;
-           successor_states.push(state);
-       }
-       successor_states
     }
 
     fn can_prune(self: &Self, geode_threshold: u32, remaining_time: u32) -> bool {
@@ -95,9 +96,7 @@ fn part01() -> Result<u32> {
             for state in &states {
                 if state.can_prune(geode_lower_bound, t) { continue; }
                 geode_lower_bound = geode_lower_bound.max(state.geode_lower_bound(t));
-                let new_states = state.timestep(&blueprint);
-                new_states.iter().filter(|&state| !state.can_prune(geode_lower_bound, t - 1)).collect_vec();
-                next_states.extend(new_states);
+                state.timestep(&blueprint, geode_lower_bound, t, &mut next_states);
             }
             std::mem::swap(&mut states, &mut next_states);
             next_states.clear();
@@ -129,9 +128,7 @@ fn part02() -> Result<u32> {
             for state in &states {
                 if state.can_prune(geode_lower_bound, t) { continue; }
                 geode_lower_bound = geode_lower_bound.max(state.geode_lower_bound(t));
-                let new_states = state.timestep(&blueprint);
-                new_states.iter().filter(|&state| !state.can_prune(geode_lower_bound, t - 1)).collect_vec();
-                next_states.extend(new_states);
+                state.timestep(&blueprint, geode_lower_bound, t, &mut next_states);
             }
             std::mem::swap(&mut states, &mut next_states);
             next_states.clear();
