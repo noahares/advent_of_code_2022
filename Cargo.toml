@@ -92,9 +92,14 @@ path = "src/bin/day20.rs"
 name = "day21"
 path = "src/bin/day21.rs"
 
+[[bin]]
+name = "day22"
+path = "src/bin/day22.rs"
+
 [dependencies]
 anyhow = "1.0.51"
 itertools = "0.10.5"
 colored = "2.0.0"
 ndarray = "0.15.6"
 sscanf = "0.4.0"
+regex = "1"
