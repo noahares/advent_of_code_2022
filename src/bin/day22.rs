@@ -7,105 +7,202 @@ enum Direction {
     Up,
     Down,
     Left,
-    Right
+    Right,
 }
 
-impl Direction {
-    fn value(&self) -> (i32, i32) {
-        match *self {
-            Direction::Up => (-1, 0),
-            Direction::Down => (1, 0),
-            Direction::Left => (0, -1),
-            Direction::Right => (0, 1)
-        }
-    }
-
-    fn turn_clockwise(&self) -> Direction {
-        match *self {
-            Direction::Up => Direction::Right,
-            Direction::Down => Direction::Left,
-            Direction::Left => Direction::Up,
-            Direction::Right => Direction::Down
-        }
-    }
-
-    fn turn_counter_clockwise(&self) -> Direction {
-        match *self {
-            Direction::Up => Direction::Left,
-            Direction::Down => Direction::Right,
-            Direction::Left => Direction::Down,
-            Direction::Right => Direction::Up
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-enum FieldType {
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum Field {
     Tile,
     Wall,
-    Void
+    Void,
 }
 
 #[derive(Debug)]
-struct Field {
-   pos: (usize, usize),
-   field_type: FieldType
+struct Status {
+    row: usize,
+    col: usize,
+    direction: Direction,
 }
 
-struct Wormholes {
-    left: Vec<usize>,
-    up: Vec<usize>,
-    down: Vec<usize>,
-}
-
-impl Wormholes {
-    fn new(map: &Vec<Vec<Field>>) -> Self {
-        let wormholes_left = map.iter().map(|line| line.iter().find_position(|&field| field.field_type != FieldType::Void).unwrap().0).collect_vec();
-        let longest_row = map.iter().max_by(|&a, &b| a.len().cmp(&b.len())).unwrap().len();
-        let mut wormholes_up = vec![0; longest_row];
-        let mut wormholes_down = vec![map.len() - 1; longest_row];
-        for row in 1..map.len()-1 {
-            (0..map[row].len()).for_each(|column| {
-                if map[row-1].len() >= map[row].len() && map[row-1][column].field_type == FieldType::Void && map[row][column].field_type != FieldType::Void
-                || wormholes_up[column] == 0 && (map[row-1].len() - 1) < column {
-                    wormholes_up[column] = row;
-                }
-                if (map[row+1].len() <= column || map[row+1][column].field_type == FieldType::Void) && map[row][column].field_type != FieldType::Void {
-                    wormholes_down[column] = row;
-                }
-            });
+impl Status {
+    fn turn_clockwise(&mut self) {
+        self.direction = match self.direction {
+            Direction::Up => Direction::Right,
+            Direction::Down => Direction::Left,
+            Direction::Left => Direction::Up,
+            Direction::Right => Direction::Down,
         }
-        Self { left: wormholes_left, up: wormholes_up, down: wormholes_down }
+    }
+
+    fn turn_counter_clockwise(&mut self) {
+        self.direction = match self.direction {
+            Direction::Up => Direction::Left,
+            Direction::Down => Direction::Right,
+            Direction::Left => Direction::Down,
+            Direction::Right => Direction::Up,
+        }
+    }
+
+    fn move_horizontally<'a, I>(&mut self, num_steps: usize, curr_it: &mut I)
+    where
+        I: Iterator<Item = (usize, &'a Field)>,
+    {
+        for _ in 0..num_steps {
+            if let Some(new_col) = self.get_next_row(curr_it) {
+                self.col = new_col;
+            } else {
+                return;
+            }
+        }
+    }
+
+    fn move_vertically<'a, I>(&mut self, num_steps: usize, curr_it: &mut I)
+    where
+        I: Iterator<Item = (usize, &'a Vec<Field>)>,
+    {
+        for _ in 0..num_steps {
+            if let Some(new_row) = self.get_next_col(curr_it) {
+                self.row = new_row;
+            } else {
+                return;
+            }
+        }
+    }
+
+    fn get_next_row<'a, I>(&self, curr_it: &mut I) -> Option<usize>
+    where
+        I: Iterator<Item = (usize, &'a Field)>,
+    {
+        let next_tile = curr_it.next().unwrap();
+        if *next_tile.1 == Field::Wall {
+            return None;
+        }
+        if *next_tile.1 == Field::Tile {
+            return Some(next_tile.0);
+        }
+        // tile is void
+        loop {
+            let next_tile = curr_it.next().unwrap();
+            if *next_tile.1 == Field::Wall {
+                return None;
+            }
+            if *next_tile.1 == Field::Tile {
+                return Some(next_tile.0);
+            }
+        }
+    }
+
+    fn get_next_col<'a, I>(&self, curr_it: &mut I) -> Option<usize>
+    where
+        I: Iterator<Item = (usize, &'a Vec<Field>)>,
+    {
+        let next_tile = curr_it.next().unwrap();
+        if next_tile.1[self.col] == Field::Wall {
+            return None;
+        }
+        if next_tile.1[self.col] == Field::Tile {
+            return Some(next_tile.0);
+        }
+        // tile is void
+        loop {
+            let next_tile = curr_it.next().unwrap();
+            if next_tile.1[self.col] == Field::Wall {
+                return None;
+            }
+            if next_tile.1[self.col] == Field::Tile {
+                return Some(next_tile.0);
+            }
+        }
+    }
+    fn make_move(&mut self, map: &Vec<Vec<Field>>, num_steps: usize) {
+        match self.direction {
+            Direction::Up => {
+                let mut curr_it = map.iter().enumerate().rev().cycle();
+                for _ in self.row..map.len() {
+                    curr_it.next();
+                }
+                self.move_vertically(num_steps, &mut curr_it);
+            }
+            Direction::Down => {
+                let mut curr_it = map.iter().enumerate().cycle();
+                for _ in 0..=self.row {
+                    curr_it.next();
+                }
+                self.move_vertically(num_steps, &mut curr_it);
+            }
+            Direction::Left => {
+                let mut curr_it = map[self.row].iter().enumerate().rev().cycle();
+                for _ in self.col..map[self.row].len() {
+                    curr_it.next();
+                }
+                self.move_horizontally(num_steps, &mut curr_it);
+            }
+            Direction::Right => {
+                let mut curr_it = map[self.row].iter().enumerate().cycle();
+                for _ in 0..=self.col {
+                    curr_it.next();
+                }
+                self.move_horizontally(num_steps, &mut curr_it);
+            }
+        }
     }
 }
 
-impl Field {
-    fn get_new_position<'a>(&self, map: &'a Vec<Vec<Field>>, direction: &Direction, wormholes: &Wormholes) -> Option<&'a Field> {
-        let mods = (wormholes.down[self.pos.1] as i32 + 1, (map[self.pos.0].len()) as i32);
-        let mut neigbor = (((self.pos.0 as i32 + direction.value().0 + mods.0) % mods.0) as usize, ((self.pos.1 as i32 + direction.value().1 + mods.1) % mods.1) as usize);
-        neigbor.0 = neigbor.0.clamp(wormholes.up[neigbor.1], wormholes.down[neigbor.1]);
-        neigbor.1 = neigbor.1.clamp(wormholes.left[neigbor.0], mods.1 as usize);
-        if map[neigbor.0][neigbor.1].field_type == FieldType::Tile { Some(&map[neigbor.0][neigbor.1]) }
-        else { None }
+fn part01(map: &Vec<Vec<Field>>, instructions: &Vec<String>) -> Result<u32> {
+    let mut status = Status {
+        row: 0,
+        col: map[0]
+            .iter()
+            .enumerate()
+            .find(|(_, tile)| **tile == Field::Tile)
+            .unwrap()
+            .0,
+        direction: Direction::Right,
+    };
+    for ins in instructions {
+        match ins.as_str() {
+            "R" => status.turn_clockwise(),
+            "L" => status.turn_counter_clockwise(),
+            n => status.make_move(map, n.parse().unwrap()),
+        }
     }
+    let password = 1_000 * (status.row + 1)
+        + 4 * (status.col + 1)
+        + match status.direction {
+            Direction::Right => 0,
+            Direction::Down => 1,
+            Direction::Left => 2,
+            Direction::Up => 3,
+        };
+    Ok(password as u32)
 }
 
-fn part01() -> Result<u32> {
+fn part02() -> Result<u32> {
+    Ok(0)
+}
+
+fn main() -> Result<()> {
     let input = std::fs::read_to_string("./data/day22.input")?;
-    let (map, instructions) = input
-        .split_once("\n\n").unwrap();
-    let map = map
+    let (map, instructions) = input.split_once("\n\n").unwrap();
+    let mut map = map
         .lines()
-        .enumerate()
-        .map(|(i, line)| line.char_indices().map(move |(j, c)| Field { pos: (i, j), field_type: match c {
-            '.' => FieldType::Tile,
-            '#' => FieldType::Wall,
-            ' ' => FieldType::Void,
-            _ => unreachable!()
-
-        }}).collect_vec())
-    .collect_vec();
-    let wormholes = Wormholes::new(&map);
+        .map(|line| {
+            line.chars()
+                .map(|c| match c {
+                    '.' => Field::Tile,
+                    '#' => Field::Wall,
+                    ' ' => Field::Void,
+                    _ => unreachable!(),
+                })
+                .collect_vec()
+        })
+        .collect_vec();
+    let max_col = map.iter().map(|v| v.len()).max().unwrap();
+    map.iter_mut().for_each(|v| {
+        if v.len() < max_col {
+            v.extend(vec![Field::Void; max_col - v.len()].iter())
+        }
+    });
     let regex = Regex::new(r"\d+").unwrap();
     let mut parsed_instructions = Vec::new();
     let mut last_end = 0;
@@ -121,50 +218,7 @@ fn part01() -> Result<u32> {
     if last_end < instructions.len() {
         parsed_instructions.push(instructions[last_end..].to_string());
     }
-    // for line in &map {
-    //     println!("{line:?}");
-    // }
-    // println!("{parsed_instructions:?}");
-    // println!("{:?}", wormholes.up);
-    // println!("{:?}", wormholes.down);
-    // println!("{:?}", wormholes.left);
-    let mut my_position = &map[0][wormholes.left[0]];
-    let mut my_direction = Direction::Right;
-    for ins in &parsed_instructions {
-        // println!("{:?}", my_direction);
-        // println!("{:?}", ins);
-        match ins.as_str() {
-            "R" => my_direction = my_direction.turn_clockwise(),
-            "L" => my_direction = my_direction.turn_counter_clockwise(),
-            n => {
-                let num_steps: usize = n.parse().unwrap();
-                for _ in 0..num_steps {
-                    match my_position.get_new_position(&map, &my_direction, &wormholes) {
-                        Some(pos) => my_position = pos,
-                        None => break
-                    }
-                }
-                // println!("{:?}", my_position);
-            }
-        }
-
-    }
-    // println!("{:?}", my_position);
-    let password = 1_000 * (my_position.pos.0 + 1) + 4 * (my_position.pos.1 + 1) + match my_direction {
-        Direction::Right => 0,
-        Direction::Down => 1,
-        Direction::Left => 2,
-        Direction::Up => 3,
-    };
-    Ok(password as u32)
-}
-
-fn part02() -> Result<u32> {
-    Ok(0)
-}
-
-fn main() -> Result<()> {
-    println!("{:?}", part01().unwrap());
+    println!("{:?}", part01(&map, &parsed_instructions).unwrap());
     println!("{:?}", part02().unwrap());
     Ok(())
 }
